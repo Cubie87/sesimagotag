@@ -55,28 +55,53 @@ void setup() {
         while(1);
     }
     if((RedImage = (UBYTE *)malloc(Imagesize)) == NULL) {
-        Serial.println("Failed to apply for black memory...");
+        Serial.println("Failed to apply for red memory...");
         while(1);
     }
     Serial.println("Paint_NewImage");
     Paint_NewImage(BlackImage, EPD_2IN66BSES_WIDTH, EPD_2IN66BSES_HEIGHT, 270, WHITE);
     Paint_NewImage(RedImage, EPD_2IN66BSES_WIDTH, EPD_2IN66BSES_HEIGHT, 270, WHITE);
 	
-#if 1   //show image for array    
-    Serial.println("show image for array");
-    Paint_SelectImage(BlackImage);
-    Paint_Clear(WHITE);
-    Paint_DrawBitMap(gImage_2in66bb);
 
+// hello world in red and black text
+// red text renders poorly currently
+#if 1
+    Serial.println("Drawing text");
+
+    //1. Select layer
     Paint_SelectImage(RedImage);
+    //2. Clear previous drawings to white
+    Paint_Clear(BLACK); // don't ask why colors are inverted for the red layer
+    //3. Draw what you want
+    Paint_DrawString_EN(20, 20, "hello world", &Font24, BLACK, WHITE); // definitely inverted for the red layer.
+
+    //1. Select layer
+    Paint_SelectImage(BlackImage);
+    //2. Clear previous drawings to white
     Paint_Clear(WHITE);
-    Paint_DrawBitMap(gImage_2in66br);
-	
+    //3. Draw what you want
+    Paint_DrawString_EN(20, 60, "hello world", &Font24, WHITE, BLACK);
+
+    //4. PUsh it to the display
     EPD_2IN66BSES_Display(BlackImage, RedImage);
-    DEV_Delay_ms(2000);
+
+    DEV_Delay_ms(5000);
+
+
+    Serial.println("Drawing text");
+    //1. Select layer
+    Paint_SelectImage(RedImage);
+    //3. Draw what you want
+    Paint_DrawString_EN(20, 100, "hello world", &Font24, BLACK, WHITE); // definitely inverted for the red layer.
+
+    EPD_2IN66BSES_Display(BlackImage, RedImage);
+    DEV_Delay_ms(4000);
 #endif
 
-#if 1   // Drawing on the image
+
+
+// stock example drawing of shapes, etc.
+#if 0 // Drawing on the image
     //1.Select Image
     Paint_SelectImage(BlackImage);
     Paint_Clear(WHITE);
@@ -111,8 +136,10 @@ void setup() {
     Paint_DrawString_CN(130, 20, "微雪电子", &Font24CN, WHITE, BLACK);
 
     EPD_2IN66BSES_Display(BlackImage, RedImage);
-    DEV_Delay_ms(4000);   
+    DEV_Delay_ms(4000);
 #endif
+
+
 	Serial.println("Clear...");
 	EPD_2IN66BSES_Clear();
 
@@ -124,11 +151,13 @@ void setup() {
 	free(RedImage);
 	RedImage = NULL;
 	// close 5V
-	Serial.println("close 5V, Module enters 0 power consumption ...");    
+	Serial.println("close 5V, Module enters 0 power consumption ...");  */   
+	Serial.println("done");
 }
 
 /* The main loop -------------------------------------------------------------*/
 void loop()
 {
+    sleep(500);
   //
 }
