@@ -9,7 +9,7 @@ for VUSION 2.6 BWR GL320 eInk Store Pricetags, controlled by an ESP32
 | ESP32 Pin |  EPD |  Description  |
 | --------- | -----|  -----------  |
 |    13     |  SCK |  Serial Clock |
-|    14     |  SDA |  Serial Data  |
+|    14     | MOSI |  Serial Data  |
 |    15     |  CS  |  Chip Select  |
 |    25     | BUSY |  Busy Signal  |
 |    26     |  RST |  Reset        |
@@ -47,4 +47,4 @@ Guessing it's a two layer PCB as it has the layers printed in text.
 ## Credits
 Credit to [jcyfkimi](https://github.com/jcyfkimi/arduino_esp32_epd_lib) for the original libraries. Fixed some typos in includefiles and refactored directories for standalone operation.
 
-Credit to [ATC1441](https://github.com/atc1441) for presumably the EDP connector. I cannot find the repository link but assume it is on the internet somewhere.
+Credit to [ATC1441](https://github.com/atc1441) for [the EPD connector](https://www.pcbway.com/project/shareproject/Universal_E_Paper_adapter_PCB_9b9a845c.html). I cannot find the repository link but assume it is on the internet somewhere.
