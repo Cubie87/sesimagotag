@@ -151,7 +151,7 @@ void setup() {
 	free(RedImage);
 	RedImage = NULL;
 	// close 5V
-	Serial.println("close 5V, Module enters 0 power consumption ...");  */   
+	Serial.println("close 5V, Module enters 0 power consumption ...");
 	Serial.println("done");
 }
 
