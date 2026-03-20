@@ -65,7 +65,7 @@ void setup() {
 
 // hello world in red and black text
 // red text renders poorly currently
-#if 1
+#if 0
     Serial.println("Drawing text");
 
     //1. Select layer
@@ -99,6 +99,20 @@ void setup() {
 #endif
 
 
+#if 1   //show image from array    
+    Serial.println("show image from array");
+    Paint_SelectImage(BlackImage);
+    Paint_Clear(WHITE);
+    Paint_DrawBitMap(gImage_2in66bb);
+
+    //1. Select layer
+    Paint_SelectImage(RedImage);
+    //2. Clear previous drawings to white
+    Paint_Clear(BLACK); // don't ask why colors are inverted for the red layer
+	
+    EPD_2IN66BSES_Display(BlackImage, RedImage);
+    DEV_Delay_ms(2000);
+#endif
 
 // stock example drawing of shapes, etc.
 #if 0 // Drawing on the image
@@ -122,24 +136,25 @@ void setup() {
     Paint_DrawCircle(105, 95, 20, WHITE, DOT_PIXEL_1X1, DRAW_FILL_FULL);
 
     Paint_SelectImage(RedImage);
-    Paint_Clear(WHITE);
-    Paint_DrawLine(85, 95, 125, 95, BLACK, DOT_PIXEL_1X1, LINE_STYLE_DOTTED);
-    Paint_DrawLine(105, 75, 105, 115, BLACK, DOT_PIXEL_1X1, LINE_STYLE_DOTTED);
+    Paint_Clear(BLACK);
+    // Paint_DrawLine(85, 95, 125, 95, BLACK, DOT_PIXEL_1X1, LINE_STYLE_DOTTED);
+    // Paint_DrawLine(105, 75, 105, 115, BLACK, DOT_PIXEL_1X1, LINE_STYLE_DOTTED);
 
-    Paint_DrawString_EN(10, 0, "waveshare", &Font16, BLACK, WHITE);
-    Paint_DrawString_EN(10, 20, "hello world", &Font12, WHITE, BLACK);
+    // Paint_DrawString_EN(10, 0, "waveshare", &Font16, BLACK, WHITE);
+    // Paint_DrawString_EN(10, 20, "hello world", &Font12, WHITE, BLACK);
 
-    Paint_DrawNum(10, 33, 123456789, &Font12, BLACK, WHITE);
-    Paint_DrawNum(10, 50, 987654321, &Font16, WHITE, BLACK);
+    // Paint_DrawNum(10, 33, 123456789, &Font12, BLACK, WHITE);
+    // Paint_DrawNum(10, 50, 987654321, &Font16, WHITE, BLACK);
 
-    Paint_DrawString_CN(130, 0,"你好abc", &Font12CN, BLACK, WHITE);
-    Paint_DrawString_CN(130, 20, "微雪电子", &Font24CN, WHITE, BLACK);
+    // Paint_DrawString_CN(130, 0,"你好abc", &Font12CN, BLACK, WHITE);
+    // Paint_DrawString_CN(130, 20, "微雪电子", &Font24CN, WHITE, BLACK);
 
     EPD_2IN66BSES_Display(BlackImage, RedImage);
     DEV_Delay_ms(4000);
 #endif
 
 
+#if 0
 	Serial.println("Clear...");
 	EPD_2IN66BSES_Clear();
 
@@ -152,6 +167,7 @@ void setup() {
 	RedImage = NULL;
 	// close 5V
 	Serial.println("close 5V, Module enters 0 power consumption ...");
+#endif
 	Serial.println("done");
 }
 
