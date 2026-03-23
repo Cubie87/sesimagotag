@@ -60,7 +60,7 @@ The image should display on the e-ink.
 
 ![rick astley demo image](./epd2in66bses-demo/image-processor/test.png)
 
-
+![rick astley demo image rendered on eink](./pics/rick.jpg)
 
 ## Credits
 Credit to [jcyfkimi](https://github.com/jcyfkimi/arduino_esp32_epd_lib) for the original libraries. Fixed some typos in includefiles and refactored directories for standalone operation.
