@@ -44,7 +44,25 @@ Guessing it's a two layer PCB as it has the layers printed in text.
 
 ![other side of edp connector](/pics/edp-conn2.jpeg)
 
+## Operation
+
+Create a 296 by 152 pixel image. It has to be portrait, not landscape.
+
+Use the `epd2in66bses-demo/imagepprocessor/image-to-hex.py` script to convert it into hex values. Note this script was written with LLM assistance.
+
+The resulting hex values will be in `image_hex.txt`.
+
+Copy these hex values into `epd2in66bses-demo/ImageData.c` as `const unsigned char gImage_2in66bb[5630]` 
+
+Run arduino compile and upload.
+
+The image should display on the e-ink.
+
+![rick astley demo image](./epd2in66bses-demo/image-processor/test.png)
+
+
+
 ## Credits
 Credit to [jcyfkimi](https://github.com/jcyfkimi/arduino_esp32_epd_lib) for the original libraries. Fixed some typos in includefiles and refactored directories for standalone operation.
 
-Credit to [ATC1441](https://github.com/atc1441) for [the EPD connector](https://www.pcbway.com/project/shareproject/Universal_E_Paper_adapter_PCB_9b9a845c.html). I cannot find the repository link but assume it is on the internet somewhere.
+Credit to [ATC1441](https://github.com/atc1441) for [the EPD connector](https://www.pcbway.com/project/shareproject/Universal_E_Paper_adapter_PCB_9b9a845c.html).
