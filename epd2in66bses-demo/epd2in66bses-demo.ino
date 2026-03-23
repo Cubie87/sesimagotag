@@ -158,9 +158,6 @@ void setup() {
 	Serial.println("Clear...");
 	EPD_2IN66BSES_Clear();
 
-	Serial.println("Goto Sleep...");
-	EPD_2IN66BSES_Sleep();
-
 	free(BlackImage);
 	BlackImage = NULL;
 	free(RedImage);
@@ -168,6 +165,9 @@ void setup() {
 	// close 5V
 	Serial.println("close 5V, Module enters 0 power consumption ...");
 #endif
+
+	Serial.println("Goto Sleep...");
+	EPD_2IN66BSES_Sleep();
 	Serial.println("done");
 }
 

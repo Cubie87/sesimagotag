@@ -1,0 +1,4 @@
+./bin/python
+./bin/pip
+source ./bin/activate
+deactivate
