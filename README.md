@@ -19,6 +19,26 @@ for VUSION 2.6 BWR GL320 eInk Store Pricetags, controlled by an ESP32
 ![which way the ribbon connector should face](/pics/connector-orientation.jpeg)
 
 
+## Operation
+
+Create a 296 by 152 pixel image. It has to be portrait, not landscape.
+
+Use the `epd2in66bses-demo/imagepprocessor/image-to-hex.py` script to convert it into hex values. Note this script was written with LLM assistance.
+
+The resulting hex values will be in `image_hex.txt`.
+
+Copy these hex values into `epd2in66bses-demo/ImageData.c` as `const unsigned char gImage_2in66bb[5630]` 
+
+Run arduino compile and upload.
+
+The image should display on the e-ink.
+
+![rick astley demo image](./epd2in66bses-demo/image-processor/test.png)
+
+![rick astley demo image rendered on eink](./pics/rick.jpg)
+
+
+
 ## Disassembly
 
 Pry the battery cover off using a small flathead screwdriver. There are no screws.
@@ -43,24 +63,6 @@ Guessing it's a two layer PCB as it has the layers printed in text.
 ![the edp connector by ATC1441 used between the ESP32 and eInk screen](/pics/edp-conn1.jpeg)
 
 ![other side of edp connector](/pics/edp-conn2.jpeg)
-
-## Operation
-
-Create a 296 by 152 pixel image. It has to be portrait, not landscape.
-
-Use the `epd2in66bses-demo/imagepprocessor/image-to-hex.py` script to convert it into hex values. Note this script was written with LLM assistance.
-
-The resulting hex values will be in `image_hex.txt`.
-
-Copy these hex values into `epd2in66bses-demo/ImageData.c` as `const unsigned char gImage_2in66bb[5630]` 
-
-Run arduino compile and upload.
-
-The image should display on the e-ink.
-
-![rick astley demo image](./epd2in66bses-demo/image-processor/test.png)
-
-![rick astley demo image rendered on eink](./pics/rick.jpg)
 
 ## Credits
 Credit to [jcyfkimi](https://github.com/jcyfkimi/arduino_esp32_epd_lib) for the original libraries. Fixed some typos in includefiles and refactored directories for standalone operation.
