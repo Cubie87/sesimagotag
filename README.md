@@ -21,9 +21,19 @@ for VUSION 2.6 BWR GL320 eInk Store Pricetags, controlled by an ESP32
 
 ## Operation
 
-Create a 296 by 152 pixel image. It has to be portrait, not landscape.
+Create a 296 by 152 pixel image. It has to be portrait, not landscape. Use `.png` (or die >:).
 
 Use the `epd2in66bses-demo/imagepprocessor/image-to-hex.py` script to convert it into hex values. Note this script was written with LLM assistance.
+
+``` bash
+git clone XXX
+cd epd2in66bses-demo/imagepprocessor/
+python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+
+# Usage of tool
+python3 ./image-to-hex.py -i image.png -o bytes.txt
+```
 
 The resulting hex values will be in `image_hex.txt`.
 
