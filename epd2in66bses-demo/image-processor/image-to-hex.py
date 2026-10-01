@@ -1,33 +1,68 @@
+#!/usr/bin/env python3
+import argparse
 import cv2
 import numpy as np
 
-# 1. Read the image as grayscale (0 flag)
-img_path = 'test.png'
-img = cv2.imread(img_path, 0) # img is a numpy array with values 0-255
 
-# 2. Define a threshold
-threshold_value = 128
+def main():
+    parser = argparse.ArgumentParser(
+    formatter_class=argparse.RawDescriptionHelpFormatter,
+    description="""Convert an image to a packed hexadecimal byte representation.
 
-# 3. Apply the threshold to get 0s and 1s
-# If pixel value < 128, it becomes 0 (black); otherwise, it becomes 1 (white)
-binary_img = (img >= threshold_value).astype(int)
+    Reads an image and converts it to a binary bitmap. 
+    Pixels >= 128 are treated as white (1), pixels < 128 as black (0). 
+    The resulting bits are packed into bytes and written as hexadecimal.
 
-# Now, 'binary_img' is a 2D numpy array containing only 0s and 1s.
-# You can then process this array further or save it as a text file if needed.
-#print(binary_img)
+    Ensure the image is 296x152px and vertically orientated before parsing, if flashing to an equivalent e-ink display!
+
+    Example:
+    image-to-hex.py -i CroppedCentre.png -o image_hex.txt
+    """
+    )
+
+    parser.add_argument(
+        "-i", "--input",
+        required=True,
+        help="Path to the input image"
+    )
+
+    parser.add_argument(
+        "-o", "--output",
+        required=True,
+        help="Path to the output text file"
+    )
+
+    args = parser.parse_args()
+
+    # Read image as grayscale
+    img = cv2.imread(args.input, 0)
+
+    if img is None:
+        parser.error(f"Could not read input image: {args.input}")
+
+    # Define threshold
+    threshold_value = 128
+
+    # Convert pixels to 0/1
+    binary_img = (img >= threshold_value).astype(int)
+
+    # Flatten into a 1D array
+    flat_bits = binary_img.flatten()
+
+    # Pack groups of 8 bits into bytes
+    packed_bytes = np.packbits(flat_bits)
+
+    # Convert bytes to hex strings
+    hex_output = [f"0X{b:02X}" for b in packed_bytes]
+
+    formatted_data = ", ".join(hex_output)
+
+    # Write output
+    with open(args.output, "w") as f:
+        f.write(formatted_data)
+
+    print(f"Wrote {len(packed_bytes)} bytes to {args.output}")
 
 
-flat_bits = binary_img.flatten()
-
-# 2. Pack the bits into bytes (automatically handles groups of 8)
-packed_bytes = np.packbits(flat_bits)
-
-# 3. Convert those bytes to hex strings
-hex_output = [f"0X{b:02X}" for b in packed_bytes]
-
-formatted_data = ", ".join(hex_output)
-
-print(formatted_data)
-
-with open("image_hex.txt", "w") as f:
-    f.write(formatted_data)
+if __name__ == "__main__":
+    main()
