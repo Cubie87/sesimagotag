@@ -1,179 +1,772 @@
 /*****************************************************************************
-* | File      	:   epd2in66bses-demo.ino
-* | Author      :   Kimi based on Waveshare team's sample code
-* | Function    :   2.66inch e-paper wbr from SES VUSION 2.6 BWR GL420 arduino demo
-* | Info        :
-*----------------
-* |	This version:   V1.0
-* | Date        :   2022-09-13
-* | Info        :
-* | Tested epd  :   BE2266ES0550ET7AMY01125
-* |                 TC026SC1C3-S5(AE2266ES0550EZ7B22009TY)
-* -----------------------------------------------------------------------------
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documnetation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to  whom the Software is
-# furished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS OR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-# THE SOFTWARE.
-#
-******************************************************************************/
+* E-Ink Burn-In / Ghosting Cleaner
+*
+* Based on:
+*   Waveshare 2.66" BWR SES VUSION demo
+*
+* Supported commands over Serial @ 115200 baud:
+*
+*   refresh screen
+*       Run the burn-in / ghosting cleaner.
+*       Prompts for 10, 25, 50, or 100 cycles.
+*
+*   write image
+*       Display gImage_2in66bb from ImageData.c
+*
+*   help
+*       Show available commands.
+*
+*   status
+*       Show display status.
+*
+*****************************************************************************/
 
 #include "DEV_Config.h"
 #include "EPD.h"
 #include "GUI_Paint.h"
 #include "ImageData.h"
-#include <stdlib.h>
 
-void setup() {
-    Serial.begin(9600); // Start Serial monitoring over USB to host computer
-    Serial.println("EPD_2IN66BSES_test Demo");
+#include <stdlib.h>
+#include <string.h>
+
+
+// ---------------------------------------------------------------------------
+// Configuration
+// ---------------------------------------------------------------------------
+
+#define SERIAL_BAUD 115200
+
+#define REFRESH_DELAY_MS 3000
+#define CLEAR_DELAY_MS   500
+
+#define SERIAL_BUFFER_SIZE 64
+
+
+// ---------------------------------------------------------------------------
+// Framebuffers
+// ---------------------------------------------------------------------------
+
+UBYTE *BlackImage = NULL;
+UBYTE *RedImage   = NULL;
+
+UWORD ImageSize = 0;
+
+
+// ---------------------------------------------------------------------------
+// Display state
+// ---------------------------------------------------------------------------
+
+bool displayInitialised = false;
+
+
+// ---------------------------------------------------------------------------
+// Serial command buffer
+// ---------------------------------------------------------------------------
+
+char serialBuffer[SERIAL_BUFFER_SIZE];
+uint8_t serialBufferIndex = 0;
+
+
+// ---------------------------------------------------------------------------
+// Forward declarations
+// ---------------------------------------------------------------------------
+
+bool allocateFramebuffers();
+void freeFramebuffers();
+
+void initialiseDisplay();
+void sleepDisplay();
+
+void refreshScreen(uint16_t cycles);
+void writeImage();
+
+void fillBlackWhite();
+void fillWhite();
+
+void printHelp();
+void printStatus();
+
+void processCommand(char *command);
+void processRefreshCommand();
+
+
+// ---------------------------------------------------------------------------
+// Setup
+// ---------------------------------------------------------------------------
+
+void setup()
+{
+    Serial.begin(SERIAL_BAUD);
+
+    delay(500);
+
+    Serial.println();
+    Serial.println("========================================");
+    Serial.println("  2.66in BWR E-Ink Screen Utility");
+    Serial.println("========================================");
+    Serial.println();
+
+    Serial.print("Initialising display... ");
+
+    initialiseDisplay();
+
+    Serial.println("OK");
+    Serial.println();
+
+    printHelp();
+}
+
+
+// ---------------------------------------------------------------------------
+// Main loop
+// ---------------------------------------------------------------------------
+
+void loop()
+{
+    while (Serial.available() > 0)
+    {
+        char c = Serial.read();
+
+        // Newline terminates a command
+        if (c == '\n' || c == '\r')
+        {
+            if (serialBufferIndex > 0)
+            {
+                serialBuffer[serialBufferIndex] = '\0';
+
+                processCommand(serialBuffer);
+
+                serialBufferIndex = 0;
+                memset(serialBuffer, 0, sizeof(serialBuffer));
+            }
+        }
+        else
+        {
+            // Prevent buffer overflow
+            if (serialBufferIndex < SERIAL_BUFFER_SIZE - 1)
+            {
+                serialBuffer[serialBufferIndex++] = c;
+            }
+        }
+    }
+}
+
+
+// ===========================================================================
+// Display initialisation
+// ===========================================================================
+
+void initialiseDisplay()
+{
     DEV_Module_Init();
 
-    Serial.println("e-Paper Init and Clear...");
     EPD_2IN66BSES_Init();
-    EPD_2IN66BSES_Clear();
-    DEV_Delay_ms(500);
 
-    //Create a new image cache
-    UBYTE *BlackImage, *RedImage;
+    displayInitialised = true;
+}
 
-    UWORD Imagesize = ((EPD_2IN66BSES_WIDTH % 8 == 0)? (EPD_2IN66BSES_WIDTH / 8 ): (EPD_2IN66BSES_WIDTH / 8 + 1)) * EPD_2IN66BSES_HEIGHT;
-    if((BlackImage = (UBYTE *)malloc(Imagesize)) == NULL) {
-        Serial.println("Failed to apply for black memory...");
-        while(1);
+
+// ===========================================================================
+// Allocate framebuffers
+// ===========================================================================
+
+bool allocateFramebuffers()
+{
+    if (BlackImage != NULL || RedImage != NULL)
+    {
+        freeFramebuffers();
     }
-    if((RedImage = (UBYTE *)malloc(Imagesize)) == NULL) {
-        Serial.println("Failed to apply for red memory...");
-        while(1);
+
+    ImageSize =
+        ((EPD_2IN66BSES_WIDTH % 8 == 0)
+            ? (EPD_2IN66BSES_WIDTH / 8)
+            : (EPD_2IN66BSES_WIDTH / 8 + 1))
+        * EPD_2IN66BSES_HEIGHT;
+
+
+    Serial.print("Allocating framebuffer: ");
+    Serial.print(ImageSize);
+    Serial.println(" bytes each");
+
+
+    BlackImage = (UBYTE *)malloc(ImageSize);
+
+    if (BlackImage == NULL)
+    {
+        Serial.println("ERROR: Failed to allocate BlackImage");
+        return false;
     }
-    Serial.println("Paint_NewImage");
-    Paint_NewImage(BlackImage, EPD_2IN66BSES_WIDTH, EPD_2IN66BSES_HEIGHT, 270, WHITE);
-    Paint_NewImage(RedImage, EPD_2IN66BSES_WIDTH, EPD_2IN66BSES_HEIGHT, 270, WHITE);
-	
 
-// hello world in red and black text
-// red text renders poorly currently
-#if 0
-    Serial.println("Drawing text");
 
-    //1. Select layer
-    Paint_SelectImage(RedImage);
-    //2. Clear previous drawings to white
-    Paint_Clear(BLACK); // don't ask why colors are inverted for the red layer
-    //3. Draw what you want
-    Paint_DrawString_EN(20, 20, "hello world", &Font24, BLACK, WHITE); // definitely inverted for the red layer.
+    RedImage = (UBYTE *)malloc(ImageSize);
 
-    //1. Select layer
+    if (RedImage == NULL)
+    {
+        Serial.println("ERROR: Failed to allocate RedImage");
+
+        free(BlackImage);
+        BlackImage = NULL;
+
+        return false;
+    }
+
+
+    /*
+     * Initialise both Paint images.
+     *
+     * The rotation is retained from the original Waveshare example.
+     */
+
+    Paint_NewImage(
+        BlackImage,
+        EPD_2IN66BSES_WIDTH,
+        EPD_2IN66BSES_HEIGHT,
+        270,
+        WHITE
+    );
+
+    Paint_NewImage(
+        RedImage,
+        EPD_2IN66BSES_WIDTH,
+        EPD_2IN66BSES_HEIGHT,
+        270,
+        WHITE
+    );
+
+
+    return true;
+}
+
+
+// ===========================================================================
+// Free framebuffers
+// ===========================================================================
+
+void freeFramebuffers()
+{
+    if (BlackImage != NULL)
+    {
+        free(BlackImage);
+        BlackImage = NULL;
+    }
+
+    if (RedImage != NULL)
+    {
+        free(RedImage);
+        RedImage = NULL;
+    }
+
+    ImageSize = 0;
+}
+
+
+// ===========================================================================
+// Full-screen BLACK / WHITE frame
+// ===========================================================================
+
+void fillBlackWhite()
+{
+    /*
+     * Black channel:
+     *   completely black
+     *
+     * Red channel:
+     *   cleared to its inactive state.
+     *
+     * The original Waveshare example uses BLACK here for the
+     * RedImage buffer, so retain that behaviour.
+     */
+
     Paint_SelectImage(BlackImage);
-    //2. Clear previous drawings to white
-    Paint_Clear(WHITE);
-    //3. Draw what you want
-    Paint_DrawString_EN(20, 60, "hello world", &Font24, WHITE, BLACK);
-
-    //4. PUsh it to the display
-    EPD_2IN66BSES_Display(BlackImage, RedImage);
-
-    DEV_Delay_ms(5000);
-
-
-    Serial.println("Drawing text");
-    //1. Select layer
-    Paint_SelectImage(RedImage);
-    //3. Draw what you want
-    Paint_DrawString_EN(20, 100, "hello world", &Font24, BLACK, WHITE); // definitely inverted for the red layer.
-
-    EPD_2IN66BSES_Display(BlackImage, RedImage);
-    DEV_Delay_ms(4000);
-#endif
-
-
-#if 1   //show image from array    
-    Serial.println("show image from array");
-    Paint_SelectImage(BlackImage);
-    Paint_Clear(WHITE);
-    Paint_DrawBitMap(gImage_2in66bb);
-
-    //1. Select layer
-    Paint_SelectImage(RedImage);
-    //2. Clear previous drawings to white
-    Paint_Clear(BLACK); // don't ask why colors are inverted for the red layer
-	
-    EPD_2IN66BSES_Display(BlackImage, RedImage);
-    DEV_Delay_ms(2000);
-#endif
-
-// stock example drawing of shapes, etc.
-#if 0 // Drawing on the image
-    //1.Select Image
-    Paint_SelectImage(BlackImage);
-    Paint_Clear(WHITE);
-
-    // 2.Drawing on the image
-    Serial.println("Drawing:BlackImage");
-    Paint_DrawPoint(10, 80, BLACK, DOT_PIXEL_1X1, DOT_STYLE_DFT);
-    Paint_DrawPoint(10, 90, BLACK, DOT_PIXEL_2X2, DOT_STYLE_DFT);
-    Paint_DrawPoint(10, 100, BLACK, DOT_PIXEL_3X3, DOT_STYLE_DFT);
-
-    Paint_DrawLine(20, 70, 70, 120, BLACK, DOT_PIXEL_1X1, LINE_STYLE_SOLID);
-    Paint_DrawLine(70, 70, 20, 120, BLACK, DOT_PIXEL_1X1, LINE_STYLE_SOLID);
-
-    Paint_DrawRectangle(20, 70, 70, 120, BLACK, DOT_PIXEL_1X1, DRAW_FILL_EMPTY);
-    Paint_DrawRectangle(80, 70, 130, 120, BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
-  
-    Paint_DrawCircle(45, 95, 20, BLACK, DOT_PIXEL_1X1, DRAW_FILL_EMPTY);
-    Paint_DrawCircle(105, 95, 20, WHITE, DOT_PIXEL_1X1, DRAW_FILL_FULL);
+    Paint_Clear(BLACK);
 
     Paint_SelectImage(RedImage);
     Paint_Clear(BLACK);
-    // Paint_DrawLine(85, 95, 125, 95, BLACK, DOT_PIXEL_1X1, LINE_STYLE_DOTTED);
-    // Paint_DrawLine(105, 75, 105, 115, BLACK, DOT_PIXEL_1X1, LINE_STYLE_DOTTED);
-
-    // Paint_DrawString_EN(10, 0, "waveshare", &Font16, BLACK, WHITE);
-    // Paint_DrawString_EN(10, 20, "hello world", &Font12, WHITE, BLACK);
-
-    // Paint_DrawNum(10, 33, 123456789, &Font12, BLACK, WHITE);
-    // Paint_DrawNum(10, 50, 987654321, &Font16, WHITE, BLACK);
-
-    // Paint_DrawString_CN(130, 0,"你好abc", &Font12CN, BLACK, WHITE);
-    // Paint_DrawString_CN(130, 20, "微雪电子", &Font24CN, WHITE, BLACK);
-
-    EPD_2IN66BSES_Display(BlackImage, RedImage);
-    DEV_Delay_ms(4000);
-#endif
-
-
-#if 0
-	Serial.println("Clear...");
-	EPD_2IN66BSES_Clear();
-
-	free(BlackImage);
-	BlackImage = NULL;
-	free(RedImage);
-	RedImage = NULL;
-	// close 5V
-	Serial.println("close 5V, Module enters 0 power consumption ...");
-#endif
-
-	Serial.println("Goto Sleep...");
-	EPD_2IN66BSES_Sleep();
-	Serial.println("done");
 }
 
-/* The main loop -------------------------------------------------------------*/
-void loop()
+
+// ===========================================================================
+// Full-screen WHITE frame
+// ===========================================================================
+
+void fillWhite()
 {
-    sleep(500);
-  //
+    /*
+     * Completely white display.
+     */
+
+    Paint_SelectImage(BlackImage);
+    Paint_Clear(WHITE);
+
+    Paint_SelectImage(RedImage);
+    Paint_Clear(BLACK);
+}
+
+
+// ===========================================================================
+// Burn-in / ghosting cleaner
+// ===========================================================================
+
+void refreshScreen(uint16_t cycles)
+{
+    Serial.println();
+    Serial.println("----------------------------------------");
+    Serial.println("E-INK GHOSTING CLEANER");
+    Serial.println("----------------------------------------");
+
+    Serial.print("Cycles: ");
+    Serial.println(cycles);
+
+    Serial.print("Delay between refreshes: ");
+    Serial.print(REFRESH_DELAY_MS);
+    Serial.println(" ms");
+
+    Serial.println();
+    Serial.println("Starting...");
+    Serial.println();
+
+
+    // Allocate temporary display buffers
+    if (!allocateFramebuffers())
+    {
+        Serial.println();
+        Serial.println("Refresh aborted.");
+        Serial.println();
+
+        return;
+    }
+
+
+    for (uint16_t cycle = 0; cycle < cycles; cycle++)
+    {
+        Serial.print("Cycle ");
+        Serial.print(cycle + 1);
+        Serial.print("/");
+        Serial.println(cycles);
+
+
+        // ---------------------------------------------------------------
+        // FULL BLACK
+        // ---------------------------------------------------------------
+
+        Serial.println("  -> BLACK");
+
+        fillBlackWhite();
+
+        EPD_2IN66BSES_Display(
+            BlackImage,
+            RedImage
+        );
+
+        DEV_Delay_ms(REFRESH_DELAY_MS);
+
+
+        // ---------------------------------------------------------------
+        // FULL WHITE
+        // ---------------------------------------------------------------
+
+        Serial.println("  -> WHITE");
+
+        fillWhite();
+
+        EPD_2IN66BSES_Display(
+            BlackImage,
+            RedImage
+        );
+
+        DEV_Delay_ms(REFRESH_DELAY_MS);
+    }
+
+
+    // -------------------------------------------------------------------
+    // Finish on white
+    // -------------------------------------------------------------------
+
+    Serial.println();
+    Serial.println("Final white refresh...");
+
+    fillWhite();
+
+    EPD_2IN66BSES_Display(
+        BlackImage,
+        RedImage
+    );
+
+    DEV_Delay_ms(REFRESH_DELAY_MS);
+
+
+    // -------------------------------------------------------------------
+    // Free framebuffer memory
+    // -------------------------------------------------------------------
+
+    freeFramebuffers();
+
+
+    Serial.println();
+    Serial.println("Ghosting cleaner complete.");
+    Serial.println("Display left white.");
+    Serial.println();
+
+
+    // Put display into low-power state
+    sleepDisplay();
+
+
+    Serial.println("Ready.");
+    Serial.println();
+}
+
+
+// ===========================================================================
+// Write existing ImageData.c image
+// ===========================================================================
+
+void writeImage()
+{
+    Serial.println();
+    Serial.println("----------------------------------------");
+    Serial.println("WRITE IMAGE");
+    Serial.println("----------------------------------------");
+
+
+    if (!allocateFramebuffers())
+    {
+        Serial.println("Image display aborted.");
+        return;
+    }
+
+
+    // -------------------------------------------------------------------
+    // Black layer
+    // -------------------------------------------------------------------
+
+    Paint_SelectImage(BlackImage);
+
+    Paint_Clear(WHITE);
+
+    Paint_DrawBitMap(gImage_2in66bb);
+
+
+    // -------------------------------------------------------------------
+    // Red layer
+    // -------------------------------------------------------------------
+
+    Paint_SelectImage(RedImage);
+
+    /*
+     * This is intentionally BLACK to match the behaviour of the
+     * original Waveshare example.
+     */
+
+    Paint_Clear(BLACK);
+
+
+    // -------------------------------------------------------------------
+    // Display
+    // -------------------------------------------------------------------
+
+    Serial.println("Writing image...");
+
+    EPD_2IN66BSES_Display(
+        BlackImage,
+        RedImage
+    );
+
+    DEV_Delay_ms(2000);
+
+
+    // -------------------------------------------------------------------
+    // Cleanup
+    // -------------------------------------------------------------------
+
+    freeFramebuffers();
+
+    Serial.println("Image written.");
+    Serial.println();
+
+    sleepDisplay();
+
+    Serial.println("Ready.");
+    Serial.println();
+}
+
+
+// ===========================================================================
+// Display sleep
+// ===========================================================================
+
+void sleepDisplay()
+{
+    if (!displayInitialised)
+    {
+        return;
+    }
+
+    Serial.println("Putting display to sleep...");
+
+    EPD_2IN66BSES_Sleep();
+
+    Serial.println("Display sleeping.");
+}
+
+
+// ===========================================================================
+// Help
+// ===========================================================================
+
+void printHelp()
+{
+    Serial.println("----------------------------------------");
+    Serial.println("Available commands:");
+    Serial.println();
+    Serial.println("  refresh screen");
+    Serial.println("      Run ghosting/burn-in cleaner.");
+    Serial.println();
+    Serial.println("  write image");
+    Serial.println("      Display gImage_2in66bb.");
+    Serial.println();
+    Serial.println("  status");
+    Serial.println("      Display current utility status.");
+    Serial.println();
+    Serial.println("  help");
+    Serial.println("      Show this help.");
+    Serial.println("----------------------------------------");
+    Serial.println();
+}
+
+
+// ===========================================================================
+// Status
+// ===========================================================================
+
+void printStatus()
+{
+    Serial.println();
+    Serial.println("----------------------------------------");
+    Serial.println("STATUS");
+    Serial.println("----------------------------------------");
+
+    Serial.print("Display initialised: ");
+
+    if (displayInitialised)
+    {
+        Serial.println("YES");
+    }
+    else
+    {
+        Serial.println("NO");
+    }
+
+
+    Serial.print("Display size: ");
+    Serial.print(EPD_2IN66BSES_WIDTH);
+    Serial.print(" x ");
+    Serial.println(EPD_2IN66BSES_HEIGHT);
+
+
+    Serial.print("Framebuffer size: ");
+
+    if (ImageSize > 0)
+    {
+        Serial.print(ImageSize);
+        Serial.println(" bytes");
+    }
+    else
+    {
+        Serial.println("not allocated");
+    }
+
+
+    Serial.print("Black framebuffer: ");
+
+    if (BlackImage != NULL)
+    {
+        Serial.println("allocated");
+    }
+    else
+    {
+        Serial.println("free");
+    }
+
+
+    Serial.print("Red framebuffer: ");
+
+    if (RedImage != NULL)
+    {
+        Serial.println("allocated");
+    }
+    else
+    {
+        Serial.println("free");
+    }
+
+    Serial.println("----------------------------------------");
+    Serial.println();
+}
+
+
+// ===========================================================================
+// Refresh command
+// ===========================================================================
+
+void processRefreshCommand()
+{
+    Serial.println();
+    Serial.println("Select refresh count:");
+    Serial.println();
+    Serial.println("  10");
+    Serial.println("  25");
+    Serial.println("  50");
+    Serial.println("  100");
+    Serial.println();
+
+    Serial.print("Cycles: ");
+
+
+    // Wait for cycle selection
+    unsigned long startTime = millis();
+
+    char choiceBuffer[16];
+    uint8_t choiceIndex = 0;
+
+    memset(choiceBuffer, 0, sizeof(choiceBuffer));
+
+
+    while (millis() - startTime < 30000)
+    {
+        while (Serial.available() > 0)
+        {
+            char c = Serial.read();
+
+
+            if (c == '\n' || c == '\r')
+            {
+                if (choiceIndex == 0)
+                {
+                    continue;
+                }
+
+                choiceBuffer[choiceIndex] = '\0';
+
+
+                int cycles = atoi(choiceBuffer);
+
+
+                if (
+                    cycles == 10 ||
+                    cycles == 25 ||
+                    cycles == 50 ||
+                    cycles == 100
+                )
+                {
+                    refreshScreen((uint16_t)cycles);
+                    return;
+                }
+
+
+                Serial.println();
+                Serial.println("Invalid selection.");
+                Serial.println("Please enter 10, 25, 50, or 100.");
+                Serial.print("Cycles: ");
+
+                choiceIndex = 0;
+                memset(choiceBuffer, 0, sizeof(choiceBuffer));
+
+                continue;
+            }
+
+
+            if (choiceIndex < sizeof(choiceBuffer) - 1)
+            {
+                choiceBuffer[choiceIndex++] = c;
+                Serial.write(c);
+            }
+        }
+    }
+
+
+    Serial.println();
+    Serial.println("Refresh selection timed out.");
+    Serial.println();
+}
+
+
+// ===========================================================================
+// Command processor
+// ===========================================================================
+
+void processCommand(char *command)
+{
+    // Remove leading whitespace
+
+    while (*command == ' ' || *command == '\t')
+    {
+        command++;
+    }
+
+
+    // Convert command to lowercase
+
+    for (char *p = command; *p != '\0'; p++)
+    {
+        if (*p >= 'A' && *p <= 'Z')
+        {
+            *p = *p + ('a' - 'A');
+        }
+    }
+
+
+    // -----------------------------------------------------------------------
+    // HELP
+    // -----------------------------------------------------------------------
+
+    if (strcmp(command, "help") == 0)
+    {
+        printHelp();
+        return;
+    }
+
+
+    // -----------------------------------------------------------------------
+    // STATUS
+    // -----------------------------------------------------------------------
+
+    if (strcmp(command, "status") == 0)
+    {
+        printStatus();
+        return;
+    }
+
+
+    // -----------------------------------------------------------------------
+    // REFRESH SCREEN
+    // -----------------------------------------------------------------------
+
+    if (strcmp(command, "refresh screen") == 0)
+    {
+        processRefreshCommand();
+        return;
+    }
+
+
+    // -----------------------------------------------------------------------
+    // WRITE IMAGE
+    // -----------------------------------------------------------------------
+
+    if (strcmp(command, "write image") == 0)
+    {
+        writeImage();
+        return;
+    }
+
+
+    // -----------------------------------------------------------------------
+    // UNKNOWN COMMAND
+    // -----------------------------------------------------------------------
+
+    Serial.print("Unknown command: ");
+    Serial.println(command);
+
+    Serial.println("Type 'help' for available commands.");
+    Serial.println();
 }
